@@ -108,11 +108,19 @@ void speech_open() {
   float m;
   speech_mx = SDL_CreateMutex();
   SDL_AudioSpec fmt;
+
+#ifndef USE_SAM
+  int freq;
+  freq = espeak_Initialize( AUDIO_OUTPUT_SYNCHRONOUS, 10000, ".", 0 );
+  printf( "Speech [info]: eSpeak frequency: %i\n", freq );
+  espeak_SetSynthCallback( espeak_cb );
+#endif 
+
 #ifdef USE_SAM
   fmt.freq     = 11025;
   fmt.format   = AUDIO_U8;
 #else
-  fmt.freq     = 22050;
+  fmt.freq     = freq;
   fmt.format   = AUDIO_S16;
 #endif   
   fmt.channels = 1;
@@ -129,10 +137,6 @@ void speech_open() {
     opened = 1;
   }
 
-#ifndef USE_SAM
-  printf( "Speech [info]: eSpeak frequency: %i\n", espeak_Initialize( AUDIO_OUTPUT_SYNCHRONOUS, 10000, ".", 0 ) );
-  espeak_SetSynthCallback( espeak_cb );
-#endif 
 }
 
 static void buf_play() {

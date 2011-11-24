@@ -6,6 +6,7 @@
 /work/
 /bin/cli.rc
 /bin/srv.rc
+/bin/espeak-data/
 
 # Ignores for windows
 desktop.ini
