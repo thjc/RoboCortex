@@ -17,7 +17,7 @@ static void lost_hooks() {
 static void key_event( int event, int key, char ascii ) {
   if( event == E_KEYDOWN ) {
     if( l_text >= 0 ) {
-      switch( key) {
+      switch( key ) {
         case SDLK_BACKSPACE:
           // Remove last character
           if( l_text > 0 ) {
@@ -66,6 +66,8 @@ static void key_event( int event, int key, char ascii ) {
       }
     } else if( key == SDLK_m ) {
       host->server_send( "/MIRROR", 7 );
+    } else if( key == SDLK_v ) {
+      host->server_send( "/VOICE", 6 );
     }
   }
 }
@@ -74,16 +76,27 @@ static void key_event( int event, int key, char ascii ) {
 static void init() {
   host->key_bind( SDLK_t );
   host->key_bind( SDLK_m );
+  host->key_bind( SDLK_v );
   host->help_add( "T: OPEN SPEECH/COMMAND PROMPT" );
+  host->help_add( "V: SET LANGUAGE/VOICE FOR SPEECH" );
   host->help_add( "M: TOGGLE REAR-VIEW MIRROR" );
 }
 
 // Handles messages from server plugin
 static void message( void* data, unsigned char size ) {
   char msg[ 256 ];
+  char *p;
   memcpy( msg, data, size );
   msg[ size ] = 0;
-  host->draw_message( msg );
+
+  if( memcmp( msg, "LANGUAGE/VOICE: ", 16 ) == 0 ) {
+    p = strchr( msg + 16, ':' );
+    *p = 0;
+    host->speak_voice( p + 1 );
+    host->draw_message( msg );
+  } else {
+    host->draw_message( msg );
+  }
 }
 
 // Sets up the plugin descriptor

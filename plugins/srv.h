@@ -17,6 +17,8 @@ typedef struct {
   void     ( *thread_stop  )( void *h_thread );
   // Block (delay) thread for the specified number of milliseconds
   void     ( *thread_delay )( int ms );
+  // Set voice used by TTS
+  char    *( *speak_voice  )( int index );
   // Use TTS to play back the specified text
   void     ( *speak_text   )( char *text );
   // Send a data packet to the client

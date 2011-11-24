@@ -29,6 +29,8 @@ typedef struct {
 typedef struct {
   long mx;
   long my;
+  long dx;
+  long dy;
   unsigned char kb; // kb_bitmask_e
 } ctrl_t;
 

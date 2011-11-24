@@ -5,6 +5,11 @@ SET CFLAGS=-g
 SET LFLAGS=-g
 SET STRIP=NO
 
+SET SPEECH=ESPEAK
+IF "%SPEECH%"=="SAM" SET SPEECH_LIBS=-lmsvcrt -lsam
+IF "%SPEECH%"=="SAM" SET CFLAGS=%CFLAGS% -DUSE_SAM
+IF "%SPEECH%"=="ESPEAK" SET SPEECH_LIBS=-lespeak
+
 IF "%1"=="-service" GOTO SERVICE_STOP
 
 :BEGIN
@@ -29,8 +34,8 @@ ECHO Compiling utils.c...
 gcc utils.c -c %CFLAGS% -I./include
 
 ECHO Linking...
-g++ oswrap.o capture.o srv.o speech.o utils.o %LFLAGS% -L ./lib-w32                               -lsdl -lkernel32 -lwsock32 -lx264 -lmsvcrt -lswscale -lavutil -lvideoinput -lddraw -ldxguid -lole32 -loleaut32 -lstrmiids -luuid -lsam -lrcplug_srv -o bin/srv.exe
-g++ oswrap.o capture.o srv.o speech.o utils.o %LFLAGS% -L ./lib-w32 -mwindows -lmingw32 -lsdlmain -lsdl -lkernel32 -lwsock32 -lx264 -lmsvcrt -lswscale -lavutil -lvideoinput -lddraw -ldxguid -lole32 -loleaut32 -lstrmiids -luuid -lsam -lrcplug_srv -o bin/srv_sdl.exe
+g++ oswrap.o capture.o srv.o speech.o utils.o %LFLAGS% -L ./lib-w32                               -lsdl -lkernel32 -lwsock32 -lx264 -lmsvcrt -lswscale -lavutil -lvideoinput -lddraw -ldxguid -lole32 -loleaut32 -lstrmiids -luuid -lrcplug_srv %SPEECH_LIBS% -o bin/srv.exe
+g++ oswrap.o capture.o srv.o speech.o utils.o %LFLAGS% -L ./lib-w32 -mwindows -lmingw32 -lsdlmain -lsdl -lkernel32 -lwsock32 -lx264 -lmsvcrt -lswscale -lavutil -lvideoinput -lddraw -ldxguid -lole32 -loleaut32 -lstrmiids -luuid -lrcplug_srv %SPEECH_LIBS% -o bin/srv_sdl.exe
 IF ERRORLEVEL 1 GOTO ERROR
 
 ECHO Cleaning up...

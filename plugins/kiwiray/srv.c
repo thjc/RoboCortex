@@ -28,6 +28,10 @@ static          char   serdev[ 256 ];   // Serial device name
 
 static          char   drive_x;         // Strafe
 static          char   drive_y;         // Move
+static          char   dj_x;         // Strafe
+static          char   dj_y;         // Move
+static          char   dk_x;         // Strafe
+static          char   dk_y;         // Move
 static          char   drive_r;         // Turn
 static unsigned  int   drive_p;         // Pitch
 static          long   integrate_r;     // Rotational(turn) integration
@@ -112,7 +116,7 @@ static int commthread() {
     p_pkt[ 3 ] = -drive_y;           // Move   Y
     p_pkt[ 4 ] =  drive_r;           // Rotate R
     p_pkt[ 5 ] =  drive_p * CAM_SEN; // Look   Pitch
-    p_pkt[ 6 ] =  6;                 // Stepsize = 1:2^6
+    p_pkt[ 6 ] =  3;                 // Stepsize = 1:2^6
     if( b_working) b_working = ( serial_write( p_pkt, 7 ) == 7 );
     if( emotilast != emoticon ) {
       p_pkt[ 1 ] = 0x33;             // Display
@@ -136,6 +140,10 @@ static void process_data( void* p_data, unsigned char size ) {
     printf( "KiwiRay [info]: Command: %s\n", data );
     if( strcmp( data, "/MIRROR" ) == 0 ) {
       host->cap_set( 1, CAP_TOGGLE, NULL, NULL );
+    } else if( strcmp( data, "/VOICE" ) == 0 ) {
+      memcpy( data, "LANGUAGE/VOICE: ", 16 );
+      strcpy( data + 16, host->speak_voice( -1 ) );
+      host->client_send( data, strlen( data ) );
     } else {
       memmove( data + 17, data, size );
       memcpy( data, "UNKNOWN COMMAND: ", 17 );
@@ -163,6 +171,7 @@ static void process_data( void* p_data, unsigned char size ) {
 // Tick: updates motion and timeouts
 static void tick() {
 	int temp;
+	int tgt_x, tgt_y;
 
 	if( !connected ) return; // Important - host->ctrl/diff not valid!
 	
@@ -170,28 +179,80 @@ static void tick() {
 	if( emoticon_timeout ) {
 	  if( --emoticon_timeout == 0 ) emoticon = EMO_CONNECTED;
 	}
-
+/*
   // Handle movement X and Y
   if( host->ctrl->kb & KB_LEFT  ) {
-    drive_x = ( drive_x > -( 127 - MOV_ACC ) ? drive_x - MOV_ACC : -127 );
-  } else if( drive_x < 0 ) {
-    drive_x = ( drive_x < -MOV_BRK ? drive_x + MOV_BRK : 0 );
+    dk_x = ( dk_x > -( 127 - MOV_ACC ) ? dk_x - MOV_ACC : -127 );
+  } else if( dk_x < 0 ) {
+    dk_x = ( dk_x < -MOV_BRK ? dk_x + MOV_BRK : 0 );
   }
   if( host->ctrl->kb & KB_RIGHT ) {
-    drive_x = ( drive_x <  ( 127 - MOV_ACC ) ? drive_x + MOV_ACC :  127 );
-  } else if( drive_x > 0 ) {
-    drive_x = ( drive_x >  MOV_BRK ? drive_x - MOV_BRK : 0 );
+    dk_x = ( dk_x <  ( 127 - MOV_ACC ) ? dk_x + MOV_ACC :  127 );
+  } else if( dk_x > 0 ) {
+    dk_x = ( dk_x >  MOV_BRK ? dk_x - MOV_BRK : 0 );
   }
   if( host->ctrl->kb & KB_UP    ) {
-    drive_y = ( drive_y > -( 127 - MOV_ACC ) ? drive_y - MOV_ACC : -127 );
-  } else if( drive_y < 0 ) {
-    drive_y = ( drive_y < -MOV_BRK ? drive_y + MOV_BRK : 0 );
+    dk_y = ( dk_y > -( 127 - MOV_ACC ) ? dk_y - MOV_ACC : -127 );
+  } else if( dk_y < 0 ) {
+    dk_y = ( dk_y < -MOV_BRK ? dk_y + MOV_BRK : 0 );
   }
   if( host->ctrl->kb & KB_DOWN  ) {
-    drive_y = ( drive_y <  ( 127 - MOV_ACC ) ? drive_y + MOV_ACC :  127 );
-  } else if( drive_y > 0 ) {
-    drive_y = ( drive_y >  MOV_BRK ? drive_y - MOV_BRK : 0 );
+    dk_y = ( dk_y <  ( 127 - MOV_ACC ) ? dk_y + MOV_ACC :  127 );
+  } else if( dk_y > 0 ) {
+    dk_y = ( dk_y >  MOV_BRK ? dk_y - MOV_BRK : 0 );
   }
+
+  if( host->ctrl->dx > dj_x ) dj_x = MIN( dj_x + MOV_ACC, host->ctrl->dx );
+  if( host->ctrl->dx < dj_x ) dj_x = MAX( dj_x - MOV_ACC, host->ctrl->dx );
+  if( host->ctrl->dy > dj_y ) dj_y = MIN( dj_y + MOV_ACC, host->ctrl->dy );
+  if( host->ctrl->dy < dj_y ) dj_y = MAX( dj_y - MOV_ACC, host->ctrl->dy );
+  
+  drive_x = MAX( MIN( dk_x + dj_x, 127 ), -127 );
+  drive_y = MAX( MIN( dk_y + dj_y, 127 ), -127 );
+
+*/
+  tgt_x = host->ctrl->dx;
+  tgt_y = host->ctrl->dy;
+  //printf("A: %i,%i\n",tgt_x,tgt_y);
+  if( host->ctrl->kb & KB_LEFT  ) tgt_x -= 127;
+  if( host->ctrl->kb & KB_RIGHT ) tgt_x += 127;
+  //printf("B: %i,%i\n",tgt_x,tgt_y);
+  if( host->ctrl->kb & KB_UP    ) tgt_y -= 127;
+  if( host->ctrl->kb & KB_DOWN  ) tgt_y += 127;
+  //printf("C: %i,%i\n",tgt_x,tgt_y);
+  
+  tgt_x = MAX( MIN( tgt_x, 127 ), -127 );
+  tgt_y = MAX( MIN( tgt_y, 127 ), -127 );
+  
+  //printf("D: %i,%i\n",tgt_x,tgt_y);
+  
+  if( drive_x >= 0 ) {
+    if( drive_x > tgt_x ) {
+      drive_x = MAX( drive_x - MOV_BRK, tgt_x );
+    } else {
+      drive_x = MIN( drive_x + MOV_ACC, tgt_x );
+    }
+  } else {
+    if( drive_x < tgt_x ) {
+      drive_x = MIN( drive_x + MOV_BRK, tgt_x );
+    } else {
+      drive_x = MAX( drive_x - MOV_ACC, tgt_x );
+    }
+  }
+  if( drive_y >= 0 ) {
+    if( drive_y > tgt_y ) {
+      drive_y = MAX( drive_y - MOV_BRK, tgt_y );
+    } else {
+      drive_y = MIN( drive_y + MOV_ACC, tgt_y );
+    }
+  } else {
+    if( drive_y < tgt_y ) {
+      drive_y = MIN( drive_y + MOV_BRK, tgt_y );
+    } else {
+      drive_y = MAX( drive_y - MOV_ACC, tgt_y );
+    }
+  }
+  
 
   // Handle movement R
   integrate_r -= ( drive_r * ROT_SEN );
@@ -222,6 +283,10 @@ static void stop_moving() {
   drive_x = 0;
   drive_y = 0;
   drive_r = 0;
+  dk_x = 0;
+  dj_x = 0;
+  dk_y = 0;
+  dj_y = 0;
   drive_p = 165 / CAM_SEN;
   integrate_r = 0;
 }
@@ -233,8 +298,14 @@ static void closer() {
 
 // Switches emoticon based on connection status
 static void connect_status( int status ) {
+  char data[ 256 ];
   connected = status;
   emoticon = ( connected ? EMO_CONNECTED : EMO_IDLE );
+  if( connected ) {
+      memcpy( data, "LANGUAGE/VOICE: ", 16 );
+      strcpy( data + 16, host->speak_voice( 0 ) );
+      host->client_send( data, strlen( data ) );
+  }
 }
 
 // Initializes serial communications

@@ -4,7 +4,7 @@
 void speech_open();
 void speech_free();
 void speech_poll();
-void speech_queue( char* speak );
+void speech_queue( char* voice, char* speak );
 int  speech_state();
 int  speech_vis( char **buffer );
 

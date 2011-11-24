@@ -49,6 +49,8 @@ typedef struct {
   void ( *server_send      )( void* data, unsigned char size );
   // Adds a line of text (max 32 characters) to the help window
   void ( *help_add         )( char* text );
+  // Set voice used by TTS
+  void ( *speak_voice      )( char* );
   // Use TTS to play back the specified text
   void ( *speak_text       )( char* );
   // Draws a popup box

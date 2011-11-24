@@ -13,7 +13,7 @@ typedef struct {
 static    termchar_t *term;
        unsigned char  term_w, term_h;
 static   SDL_Surface *font[ 2 ];
-static const    char  font_chars[] = "#!\"c % '()|+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+static const    char  font_chars[] = "#!\"c % '()|+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ";
 static unsigned char  write_index = 0;
 static   SDL_Surface *screen;
 static          char  cx = -1, cy, ct;

@@ -7,6 +7,7 @@
 typedef struct {
   unsigned char dev;
   videoInput VI;
+  unsigned char *buffer;
 } capture_t;
 
 
@@ -14,7 +15,6 @@ static int width;;
 static int height;
 static capture_t *devs[ MAX_DEVICES ];
 static int devs_count = 0;
-static unsigned char * buffer;
 
 extern "C" int capture_init( char *device, int fps, int *w, int *h ) {
   int size, dev;
@@ -45,7 +45,7 @@ extern "C" int capture_init( char *device, int fps, int *w, int *h ) {
   *w = width;
   *h = height;
   
-  buffer = new unsigned char[ size ];
+  p_dev->buffer = new unsigned char[ size ];
   
   p_dev->dev = dev;
   devs[ devs_count ] = p_dev;
@@ -55,9 +55,9 @@ extern "C" int capture_init( char *device, int fps, int *w, int *h ) {
 
 extern "C" unsigned char * capture_fetch( int dev ) {
   if( devs[ dev ]->VI.isFrameNew( dev ) ) {
-    devs[ dev ]->VI.getPixels( devs[ dev ]->dev, buffer, false, true ); // BGR, flipped
+    devs[ dev ]->VI.getPixels( devs[ dev ]->dev, devs[ dev ]->buffer, false, true ); // BGR, flipped
   }
-  return( buffer );
+  return( devs[ dev ]->buffer );
 }
 
 extern "C" void capture_free() {
@@ -75,7 +75,6 @@ extern "C" void capture_free() {
 
 static int width;;
 static int height;
-//static unsigned char * buffer;
 typedef struct {
   unsigned char *buffer;
   struct CvCapture *capture;

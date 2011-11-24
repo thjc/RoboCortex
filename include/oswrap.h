@@ -2,8 +2,8 @@
 #define _OSWRAP_H_
 
 // Math
-#define MIN( a, b ) ( a < b ? a : b )
-#define MAX( a, b ) ( a > b ? a : b )
+#define MIN( a, b ) ( ( ( a ) < ( b ) ) ? ( a ) : ( b ) )
+#define MAX( a, b ) ( ( ( a ) > ( b ) ) ? ( a ) : ( b ) )
 #define ABS( v ) ( v < 0 ? -v : v )
 
 #ifdef _WIN32

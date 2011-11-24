@@ -92,33 +92,35 @@ static           char  pkt_full[ 4 ] = "FULL";
 static           char  pkt_quit[ 4 ] = "QUIT";
 
 // Locals
-static    disp_data_t  disp_data;                       // Data from latest DISP packet
-static    SDL_Surface *spr_logo;                        // Sprites
-static    SDL_Surface *spr_box;
-static    SDL_Surface *screen;                          // Screen surface
-static            int  screen_w = SCREEN_WIDTH;         // Resolution
-static            int  screen_h = SCREEN_HEIGHT;
-static            int  screen_bpp = SCREEN_BPP;
-static            int  fullscreen = SCREEN_FS;          // Fullscreen mode active
-static   linked_buf_t *p_buffer_last;                   // Decoding buffer
-static   linked_buf_t *p_buffer_first;
-static  volatile  int  state = STATE_CONNECTING;        // Client state
-static  volatile  int  retry = 0;                       // Used for retransmissions and timeouts
-static            int  queue_time;                      // Time left before FUN
-static   linked_buf_t *trust_first = NULL;              // Non-lossy packet buffer
-static   linked_buf_t *trust_last = NULL;
-static  unsigned char  trust_srv = 0xFF;                // Non-lossy transmission counters
-static  unsigned char  trust_cli = 0x00;
-static      SDL_mutex *trust_mx;                        // Non-lossy buffer access mutex
-static            int  trust_timeout = 0;               // Non-lossy retransmission timeout
-static            int  cursor_grabbed;                  // Cursor is grabbed
-static          Uint8  draw_red, draw_green, draw_blue; // Drawing color
-static  unsigned char  layout = KL_QWERTY;
-static         SDLKey  keymap[ KM_SIZE ];               // Keyboard remapping
-static   unsigned int  message_timeout = 0;
-static    ctrl_data_t  ctrl;                            // Part of CTRL packet
-static            int  help_shown;                      // Help is displayed
-static           void  ( *comm_send )( char*, int );    // Communications handler
+static    SDL_Joystick *joy = NULL;                      // Joystick
+static    disp_data_t   disp_data;                       // Data from latest DISP packet
+static    SDL_Surface  *spr_logo;                        // Sprites
+static    SDL_Surface  *spr_box;
+static    SDL_Surface  *screen;                          // Screen surface
+static            int   screen_w = SCREEN_WIDTH;         // Resolution
+static            int   screen_h = SCREEN_HEIGHT;
+static            int   screen_bpp = SCREEN_BPP;
+static            int   fullscreen = SCREEN_FS;          // Fullscreen mode active
+static   linked_buf_t  *p_buffer_last;                   // Decoding buffer
+static   linked_buf_t  *p_buffer_first;
+static  volatile  int   state = STATE_CONNECTING;        // Client state
+static  volatile  int   retry = 0;                       // Used for retransmissions and timeouts
+static            int   queue_time;                      // Time left before FUN
+static   linked_buf_t  *trust_first = NULL;              // Non-lossy packet buffer
+static   linked_buf_t  *trust_last = NULL;
+static  unsigned char   trust_srv = 0xFF;                // Non-lossy transmission counters
+static  unsigned char   trust_cli = 0x00;
+static      SDL_mutex  *trust_mx;                        // Non-lossy buffer access mutex
+static            int   trust_timeout = 0;               // Non-lossy retransmission timeout
+static            int   cursor_grabbed;                  // Cursor is grabbed
+static          Uint8   draw_red, draw_green, draw_blue; // Drawing color
+static  unsigned char   layout = KL_QWERTY;
+static         SDLKey   keymap[ KM_SIZE ];               // Keyboard remapping
+static   unsigned int   message_timeout = 0;
+static    ctrl_data_t   ctrl;                            // Part of CTRL packet
+static            int   help_shown;                      // Help is displayed
+static           void   ( *comm_send )( char*, int );    // Communications handler
+static           char  voice[ 256 ] = "default";
 
 // Help texts
 static           char  help[ 16 ][ 33 ] = {
@@ -352,6 +354,35 @@ static void draw_help( int draw ) {
       term_white( ( term_w - 32 ) >> 1, y + n, 32 );
     }
   }
+}
+
+/* == JOYSTICK HELPERS ========================================================================== */
+static void joystick_init() {
+  joy = SDL_JoystickOpen( 0 );
+  printf( "%i", joy );
+}
+
+static int joystick_axis( int axis, int dz, int div ) {
+  axis = SDL_JoystickGetAxis( joy, axis );
+  if( axis < dz && axis > -dz ) {
+    axis = 0;
+  } else {
+    axis -= ( axis > 0 ? dz : -dz );
+  }
+  return( axis / div );
+}
+
+static void joystick_poll( long *mx, long *my, long *ix, long *iy ) {
+  //SDL_JoystickUpdate();
+  *mx  = joystick_axis( 0, 500,  256 );
+  *my  = joystick_axis( 1, 500,  256 );
+  *ix += joystick_axis( 2, 500, 1000 );
+  *iy += joystick_axis( 3, 500, 1000 );
+}
+
+static void joystick_close() {
+  if( joy ) SDL_JoystickClose( joy );
+  joy = NULL;
 }
 
 /* == CURSOR HELPERS ============================================================================ */
@@ -614,6 +645,14 @@ static void plug_thrdelay( int delay ) {
   SDL_Delay( delay );
 }
 
+static void speak_voice( char* v ) {
+  strcpy( voice, v );
+}
+
+static void speak_text( char* text ) {
+  speech_queue( voice, text );
+}
+
 static void load_plugins() {
   int pid;
   host.thread_start     = plug_thrstart;
@@ -634,7 +673,8 @@ static void load_plugins() {
   host.text_valid       = term_knows;
   host.server_send      = plug_send;
   host.help_add         = plug_help;
-  host.speak_text       = speech_queue;
+  host.speak_voice      = speak_voice;
+  host.speak_text       = speak_text;
   host.draw_wuline      = plug_wu;
   host.draw_box         = draw_box;
   host.draw_message     = draw_message;
@@ -715,6 +755,7 @@ int main( int argc, char *argv[] ) {
     printf( "Config [error]: Minimum resolution is 640x480\n" );
     exit( EXIT_CONFIG );
   }
+  
 
   // Initialize decoder
   avcodec_init();
@@ -731,8 +772,11 @@ int main( int argc, char *argv[] ) {
   // Allocate decoder frame
   pFrame = avcodec_alloc_frame();
 
-  SDL_Init( SDL_INIT_VIDEO | SDL_INIT_AUDIO );
+  SDL_Init( SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK );
   SDL_WM_SetCaption( "KiwiRay Client", "KiwiRay Client" );
+
+  // Initlalize joystick
+  joystick_init();
 
   screen = SDL_SetVideoMode( screen_w, screen_h, screen_bpp, ( fullscreen ? SDL_FULLSCREEN : 0 ) );
   // TODO: need check if fullscreen was possible?
@@ -786,6 +830,7 @@ int main( int argc, char *argv[] ) {
     
     speech_poll();
     cursor_poll( &ctrl.ctrl.mx, &ctrl.ctrl.my );
+    joystick_poll( &ctrl.ctrl.dx, &ctrl.ctrl.dy, &ctrl.ctrl.mx, &ctrl.ctrl.my );
     do_decode = 0;
 
     if( state != laststate ) {
@@ -917,7 +962,7 @@ int main( int argc, char *argv[] ) {
         SDL_FillRect( screen, rect( &r, 0, 0, screen->w, screen->h ), 0 );
       }
 
-      if( speech_vis( &p_vis ) == 0 ) {
+/*      if( speech_vis( &p_vis ) == 0 ) {
         for( temp = 0; temp < 160; temp++ ) {
           int ksx = temp * screen_w / 160, kex = ( temp + 1 ) * screen_w / 160;
           int ksy = p_vis[ temp ], key = p_vis[ temp == 159 ? 0 : temp + 1 ];
@@ -935,7 +980,7 @@ int main( int argc, char *argv[] ) {
           int ksy = p_vis[ temp ], key = p_vis[ temp == 159 ? 0 : temp + 1 ];
           draw_wu( ksx, screen_h - 40 + ksy, kex, screen_h - 40 + key );
         }
-      }
+      }*/
 
     } else {
 
@@ -1130,6 +1175,7 @@ int main( int argc, char *argv[] ) {
   avcodec_close( pCodecCtx );
   SDL_DestroyMutex( trust_mx );
   SDL_FreeSurface( frame );
+  joystick_close();
   SDL_Quit();
 
   printf( "RoboCortex [info]: KTHXBYE!\n" );

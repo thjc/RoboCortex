@@ -9,6 +9,7 @@
 
 # Ignores for windows
 desktop.ini
+/include/espeak/
 /include/videoinput.h
 /include/x264.h
 /include/ffmpeg/

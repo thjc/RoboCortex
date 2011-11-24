@@ -138,8 +138,21 @@ static               int  timeout_glitch = TIMEOUT_GLITCH;
 // Plugins
 static      pluginhost_t  host;
 static    pluginclient_t *plug;
+static         SDL_mutex *plug_mx;
 static    pluginclient_t *plugs[ MAX_PLUGINS ];
 static               int  plugs_count;
+
+// Speech
+static              char  sysvoice[ 256 ] = "default";
+#ifdef USE_SAM
+static              char  voice[ 1 ][ 256 ] = { "SAM:SAM" };
+static               int  voice_count = 1;
+#else
+static              char  voice[ 10 ][ 256 ];
+static               int  voice_count = 0;
+#endif
+static               int  voice_index = 0;
+static              char  readytext[ 80 ] = "";
 
 /* == TRUSTED COMMUNICATIONS ==================================================================== */
 
@@ -184,11 +197,13 @@ static void trust_handler( client_t *p_client, char* data, int size ) {
     size -= 5;
     if( size >= len ) {
       // plugin->recv
+      SDL_mutexP( plug_mx );
       for( pid = 0; pid < MAX_PLUGINS && ( plug = plugs[ pid ] ) != NULL; pid++ ) {
         if( plug->ident == ident ) {
           if( plug->recv ) plug->recv( data, len );
         }
       }
+      SDL_mutexV( plug_mx );
     }
     size -= len;
   }
@@ -228,6 +243,19 @@ static int config_set( char *value, char *token ) {
       timeout_trust = atoi( value );
     } else if( strcmp( token, "timeout_glitch" ) == 0 ) {
       timeout_glitch = atoi( value );
+#ifndef USE_SAM
+    } else if( strcmp( token, "sysvoice" ) == 0 ) {
+      if( strlen( value ) >= 256 ) printf( "Config [warning]: sysvoice length exceeded\n" );
+      else strcpy( sysvoice, value );
+    } else if( strcmp( token, "voice" ) == 0 ) {
+      if( voice_count == 10 ) printf( "Config [warning]: number of voices exceeded\n" );
+      else if( strlen( value ) >= 256 ) printf( "Config [warning]: voice length exceeded\n" );
+      else if( strchr( value, ':' ) == NULL ) printf( "Config [warning]: malformed voice identifier\n" );
+      else strcpy( voice[ voice_count++ ], value );
+#endif        
+    } else if( strcmp( token, "readytext" ) == 0 ) {
+      if( strlen( value ) >= 80 ) printf( "Config [warning]: readytext length exceeded" );
+      else strcpy( readytext, value );
     } else if( strcmp( token, "device" ) == 0 ) {
       if( cap_count >= ( CAP_SOURCES - 1 ) ) printf( "Config [warning]: too many capture sources.\n" );
       else {
@@ -314,8 +342,10 @@ static client_t *clients_add( remote_t *remote ) {
         clients->timeout = timeout_connection;
         do_intra = 1;
         // plugin->connected( 1 )
+        SDL_mutexP( plug_mx );
         for( pid = 0; pid < MAX_PLUGINS && ( plug = plugs[ pid ] ) != NULL; pid++ )
           if( plug->connected ) plug->connected( 1 );
+        SDL_mutexV( plug_mx );
       }
     }
     if( client_first == NULL ) {
@@ -352,8 +382,10 @@ static client_t *clients_add( remote_t *remote ) {
           host.ctrl = &client_first->ctrl.ctrl;
           host.diff = &client_first->diff;
           // plugin->connected( 1 )
+          SDL_mutexP( plug_mx );
           for( pid = 0; pid < MAX_PLUGINS && ( plug = plugs[ pid ] ) != NULL; pid++ )
             if( plug->connected ) plug->connected( 1 );
+          SDL_mutexV( plug_mx );
         }
         client_last = &clients[ n ];
         p_ret = &clients[ n ];
@@ -431,12 +463,16 @@ static void clients_tick() {
       host.ctrl = &client_first->ctrl.ctrl;
       host.diff = &client_first->diff;
       // plugin->connected( 0 )
+      SDL_mutexP( plug_mx );
       for( pid = 0; pid < MAX_PLUGINS && ( plug = plugs[ pid ] ) != NULL; pid++ )
         if( plug->connected ) plug->connected( 0 );
+      SDL_mutexV( plug_mx );
       if( client_first ) {
         // plugin->connected( 1 )
+        SDL_mutexP( plug_mx );
         for( pid = 0; pid < MAX_PLUGINS && ( plug = plugs[ pid ] ) != NULL; pid++ )
           if( plug->connected ) plug->connected( 1 );
+        SDL_mutexV( plug_mx );
       	client_first->prev = NULL;
 	      do_intra = 1; // Intra-refresh needed
       }
@@ -621,12 +657,30 @@ static int plug_cfg( char* dst, char* req_token ) {
   return( config_plugin( plug->ident, dst, req_token ) );
 }
 
+static void speak_text( char* text ) {
+  speech_queue( strchr( voice[ voice_index ], ':' ) + 1, text );
+}
+
+static char* speak_voice( int index ) {
+    if( index >= 0 ) {
+      if( index < 10 ) {
+        voice_index = index;
+      }
+    } else if( index == -1 ) {
+      if( ++voice_index >= voice_count ) voice_index = 0;
+    } else if( index == -2 ) {
+      if( --voice_index < 0 ) voice_index = voice_count - 1;
+    }
+    return( voice[ voice_index ] );
+}
+
 static void load_plugins() {
   int pid;
   host.thread_start = plug_thrstart;
   host.thread_stop  = plug_thrstop;
   host.thread_delay = plug_thrdelay;
-  host.speak_text   = speech_queue;
+  host.speak_text   = speak_text;
+  host.speak_voice  = speak_voice;
   host.client_send  = plug_send;
   host.cfg_read     = plug_cfg;
 //  host.cap_enable   = plug_cap;
@@ -641,6 +695,7 @@ static void load_plugins() {
   plugs[ plugs_count++ ] = ipv4udp_open( &host );
   printf( "RoboCortex [info]: Initializing plugins...\n" );
   // plugin->init
+  SDL_mutexP( plug_mx );
   for( pid = 0; pid < MAX_PLUGINS && ( plug = plugs[ pid ] ) != NULL; pid++ ) {
     if( config_plugin( plug->ident, NULL, NULL ) ) {
       if( plug->init ) plug->init();
@@ -648,14 +703,17 @@ static void load_plugins() {
       memset( plug, 0, sizeof( pluginclient_t ) );
     }
   }
+  SDL_mutexV( plug_mx );
   printf( "RoboCortex [info]: Plugins loaded and initialized\n" );
 }
 
 static void unload_plugins() {
   int pid;
   // plugin->close
+  SDL_mutexP( plug_mx );
   for( pid = 0; pid < MAX_PLUGINS && ( plug = plugs[ pid ] ) != NULL; pid++ )
     if( plug->close ) plug->close();
+  SDL_mutexV( plug_mx );
 }
 
 /* == APPLICATION CONTROL ======================================================================= */
@@ -687,6 +745,7 @@ void mutex_free() {
   SDL_DestroyMutex( trust_mx );
   SDL_DestroyMutex( client_mx );
   SDL_DestroyMutex( receive_mx );
+  SDL_DestroyMutex( plug_mx );
 }
 
 void sws_free() {
@@ -879,6 +938,7 @@ int main( int argc, char *argv[] ) {
   trust_mx   = SDL_CreateMutex();
   client_mx  = SDL_CreateMutex();
   receive_mx = SDL_CreateMutex();
+  plug_mx    = SDL_CreateMutex();
   atexit( mutex_free );
 
   // Load plugins
@@ -889,7 +949,7 @@ int main( int argc, char *argv[] ) {
   speech_open();
   atexit( speech_free );
 #endif
-  speech_queue( "INITIALIZED AND READY FOR CONNECTION" );
+  speech_queue( sysvoice, readytext );
 
   printf( "\nRoboCortex [info]: Initialized and ready for connection...\n" );
 
@@ -907,8 +967,10 @@ int main( int argc, char *argv[] ) {
     for( n = 0; n < cap_count; n++ ) {
       cap[ n ].data = ( uint8_t * )capture_fetch( n );
       // plugin->capture
+      SDL_mutexP( plug_mx );
       for( pid = 0; pid < MAX_PLUGINS && ( plug = plugs[ pid ] ) != NULL; pid++ )
         if( plug->capture ) plug->capture( n, cap[ n ].w, cap[ n ].h, cap[ n ].data );
+      SDL_mutexV( plug_mx );
     }
 
 		// Process and scale sources
@@ -930,8 +992,10 @@ int main( int argc, char *argv[] ) {
     if( temp ) clients_diff( client_first );
 
     // plugin->tick
+    SDL_mutexP( plug_mx );
     for( pid = 0; pid < MAX_PLUGINS && ( plug = plugs[ pid ] ) != NULL; pid++ )
       if( plug->tick ) plug->tick();
+    SDL_mutexV( plug_mx );
 
 		// Convert to I420, as explained by http://stackoverflow.com/questions/2940671/how-to-encode-series-of-images-into-h264-using-x264-api-c-c
     sws_scale( swsCtx, ( const uint8_t* const* )&pic_rgb24, &stream_stride, 0, stream_h, pic_in.img.plane, pic_in.img.i_stride );
@@ -998,16 +1062,20 @@ int main( int argc, char *argv[] ) {
       SDL_mutexV( trust_mx );
 
       // plugin->stream
+      SDL_mutexP( plug_mx );
       for( pid = 0; pid < MAX_PLUGINS && ( plug = plugs[ pid ] ) != NULL; pid++ )
         if( plug->stream ) plug->stream( p_buffer, i_buffer );
+      SDL_mutexV( plug_mx );
 
       // Send DATA packet
       ( ( pluginclient_t* )( client_first->remote.handler ) )->comm_send( p_buffer, i_buffer, &client_first->remote );
 
     } else {
       // plugin->still
+      SDL_mutexP( plug_mx );
       for( pid = 0; pid < MAX_PLUGINS && ( plug = plugs[ pid ] ) != NULL; pid++ )
         if( plug->still ) plug->still();
+      SDL_mutexV( plug_mx );
     }
 
     // Delay 1/fps seconds, constantly correct for processing overhead

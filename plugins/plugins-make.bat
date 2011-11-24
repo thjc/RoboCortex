@@ -1,8 +1,8 @@
 @ECHO OFF
 
 SETLOCAL
-SET CFLAGS=-g
-SET LFLAGS=-g
+SET CFLAGS=
+SET LFLAGS=
 SET STRIP=NO
 
 ECHO Compiling plugins/ipv4udp/...
