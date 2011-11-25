@@ -198,6 +198,8 @@ static void process_data( void* p_data, unsigned char size ) {
       memcpy( data, "LANGUAGE/VOICE: ", 16 );
       strcpy( data + 16, host->speak_voice( -1 ) );
       host->client_send( data, strlen( data ) );
+    } else if( strcmp( data, "/LIGHT" ) == 0 ) {
+    	bright = !bright;
     } else {
       memmove( data + 17, data, size );
       memcpy( data, "UNKNOWN COMMAND: ", 17 );
