@@ -23,4 +23,5 @@ desktop.ini
 
 # Ignores for linux
 /lib-linux/
-# phrst?
+/bin/cli
+/bin/srv
