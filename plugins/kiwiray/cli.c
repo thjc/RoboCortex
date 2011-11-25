@@ -15,6 +15,8 @@ static void lost_hooks() {
 
 // Handles keyboard events
 static void key_event( int event, int key, char ascii ) {
+  unsigned char n;
+  BOOL emo;
   if( event == E_KEYDOWN ) {
     if( l_text >= 0 ) {
       switch( key ) {
@@ -35,6 +37,25 @@ static void key_event( int event, int key, char ascii ) {
             host->server_send( p_text, strlen( p_text ) );
             // Queue for local playback
             if( p_text[ 0 ] != '/' ) {
+
+              for( n = 0; n < strlen( p_text ); n++ ) {
+                if( p_text[ n ] == ':' ) {
+                  emo = 1;
+                  switch( p_text[ n + 1 ] ) {
+                    case ')': 
+                    case '(': 
+                    case '|':
+                      break;
+                    default:
+                      emo = 0;
+                  }
+                  if( emo ) {
+                    p_text[ n ] = ' ';
+                    p_text[ n + 1 ] = ' ';
+                  }
+                }
+              }
+              
               host->speak_text( p_text );
             }
           }
