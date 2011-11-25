@@ -8,6 +8,7 @@
 /bin/cli.rc
 /bin/srv.rc
 /bin/espeak-data/
+/temp/
 
 # Ignores for windows
 desktop.ini
