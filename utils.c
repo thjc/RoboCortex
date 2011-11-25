@@ -141,7 +141,7 @@ SDL_Rect *rect( SDL_Rect *r, int x, int y, int w, int h ) {
 char unicode_ascii( int uni ) {
   #define INTERNATIONAL_MASK 0xFF00
   #define UNICODE_MASK       0x00FF
-  printf( "%i\n", uni );
+//  printf( "%i\n", uni );
   if( uni == 0 ) return( 0 );
   if( ( uni & INTERNATIONAL_MASK ) == 0 ) {
     return( ( char )( toupper( uni & UNICODE_MASK ) ) );

@@ -18,12 +18,6 @@ enum kb_bitmask_e {
   KB_DOWN  = 8
 };
 
-// Visemes
-typedef struct {
-	unsigned char viseme;
-	unsigned int time;
-} viseme_t;
-
 // DISP packet
 typedef struct {
   unsigned char trust_srv;

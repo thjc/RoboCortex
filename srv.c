@@ -661,6 +661,14 @@ static void speak_text( char* text ) {
   speech_queue( strchr( voice[ voice_index ], ':' ) + 1, text );
 }
 
+void speak_viseme( uint8_t viseme ) {
+  int pid;
+  SDL_mutexP( plug_mx );
+  for( pid = 0; pid < MAX_PLUGINS && ( plug = plugs[ pid ] ) != NULL; pid++ )
+    if( plug->viseme ) plug->viseme( viseme );
+  SDL_mutexV( plug_mx );
+}
+
 static char* speak_voice( int index ) {
     if( index >= 0 ) {
       if( index < 10 ) {

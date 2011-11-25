@@ -67,4 +67,6 @@ typedef struct {
   void ( *stream     )( char *packet, int size );
   // Called when a packet needs to be sent to remote end
   void ( *comm_send  )( char* data, int size, remote_t *addr );
+  // Called when speech module requests viseme display
+  void ( *viseme     )( unsigned char viseme );
 } pluginclient_t;

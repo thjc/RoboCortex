@@ -1,6 +1,6 @@
 #include <math.h>
 #include <SDL/SDL.h>
-
+#include "robocortex.h"
 #ifdef USE_SAM
 #include "include/sam/sam.h"
 #else
@@ -35,6 +35,13 @@ static unsigned char vis_mul[ 160 ];
 static int  do_vis = 0;
 static int ctr = 0;
 
+#define MAX_VISEME 1000
+
+static uint16_t viseme_count;
+static uint8_t viseme_last = 0;
+static viseme_t viseme_list[ MAX_VISEME ];
+
+static int freq;
 static int opened;
 
 int speech_vis( unsigned char **buffer ) {
@@ -50,8 +57,13 @@ static void sdl_mixer( void *unused, Uint8 *stream, int stream_len ) {
 	int i;
 	float f,dc;
 	int len=stream_len;
+	uint8_t viseme = 0;
 	if( buf_pos >= buf_size ) {
     if( speaking == 1 ) speaking = 2;
+    if( viseme_last != 0 ) {
+    	viseme_last = 0;
+    	speak_viseme( 0 );
+    }
 	} else {
 #ifdef USE_SAM
 		if( ( buf_size - buf_pos ) < len ) len = buf_size - buf_pos;
@@ -61,6 +73,14 @@ static void sdl_mixer( void *unused, Uint8 *stream, int stream_len ) {
 		}
 		if( len < stream_len ) memset( &stream[ len ], 128, stream_len - len );
 #else		
+		for( i = 0; i < viseme_count; i++ ) {
+			if( viseme_list[ i ].time > buf_pos ) break;
+			viseme = viseme_list[ i ].viseme;
+		}
+		if( viseme != viseme_last ) {
+			viseme_last = viseme;
+			speak_viseme( viseme );
+		}
 		if( ( buf_size - buf_pos ) < len ) len = buf_size - buf_pos;
 		memcpy( stream, &buf[ buf_pos ], len );
 		buf_pos += len;
@@ -87,10 +107,89 @@ static void sdl_mixer( void *unused, Uint8 *stream, int stream_len ) {
 
 }
 
-
 #ifndef USE_SAM
-int espeak_cb( short *pcm_s16, int samples, espeak_EVENT *e ) {
+
+int viseme2mouth( int viseme ) {
+	const uint8_t mouth_table[ 22 ] = {
+		0,  // Silence         
+	  11, // AE, AX, AH    
+	  11, // AA            
+	  11, // AO            
+	  10, // EY, EH, UH    
+	  11, // ER            
+	  9,  // y, IY, IH, IX 
+	  2,  // w, UW         
+	  13, // OW            
+	  9,  // AW            
+	  12, // OY            
+	  11, // AY            
+	  9,  // h             
+	  3,  // r             
+	  6,  // l             
+	  7,  // s, z          
+	  8,  // SH, CH, JH, ZH
+	  5,  // TH, DH        
+	  4,  // f, v          
+	  7,  // d, t, n       
+	  9,  // k, g, NG      
+	  1	  // p, b, m         
+	};
+	if( viseme > 21 ) viseme = 0;
+	return( mouth_table[ viseme ] );
+}
+
+// Convert eSpeak phoneme name into a SAPI viseme code
+int phoneme2viseme( unsigned int phoneme_name ) {
+	int ix;
+	unsigned int ph;
+	unsigned int ph_name;
+
+#define PH( c1, c2 ) ( c2 << 8 ) + c1          // combine two characters into an integer for phoneme name 
+
+	const unsigned char initial_to_viseme[128] = {
+		 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,   0,
+		 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,   0,
+		 0,  0,  0,  0,  0,  0,  1,  0,  0,  0, 19,  0,  0,  0,  0,   0,
+		 0,  0,  0,  5,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 255,
+		 4,  2, 18, 16, 17,  4, 18, 20, 12,  6, 16, 20, 14, 21, 20,   3,
+		21, 20, 13, 16, 17,  4,  1,  5, 20,  7, 16,  0,  0,  0,  0,   0,
+		 0,  1, 21, 16, 19,  4, 18, 20, 12,  6,  6, 20, 14, 21, 19,   8,
+		21, 20, 13, 15, 19,  7, 18,  7, 20,  7, 15,  0,  0,  0,  0,   0 };
+
+	const unsigned int viseme_exceptions[] = {
+		PH( 'a' , 'I' ), 11,
+		PH( 'a' , 'U' ),  9,
+		PH( 'O' , 'I' ), 10,
+		PH( 't' , 'S' ), 16,
+		PH( 'd' , 'Z' ), 16,
+		PH( '_' , '|' ), 255,
+		0
+	};
+	
+	ph_name = phoneme_name & 0xffff;
+	for( ix=0; ( ph = viseme_exceptions[ix] ) != 0; ix += 2 ) {
+		if( ph == ph_name ) return( viseme_exceptions[ ix + 1 ] );
+	}
+	return( initial_to_viseme[ phoneme_name & 0x7f ] );
+}
+
+int espeak_cb( short *pcm_s16, int samples, espeak_EVENT *events ) {
+	espeak_EVENT *e;
+
+	for( e = events; e->type != 0; e++ ) {
+		if( e->type == espeakEVENT_PHONEME ) {
+			if( viseme_count < MAX_VISEME ) {
+				viseme_list[ viseme_count ].viseme = viseme2mouth( phoneme2viseme( e->id.number ) );
+				viseme_list[ viseme_count ].time = ( e->audio_position * freq ) / 500;
+				viseme_count++;
+			}
+			//printf( "Viseme: %i @ %i\n", VisemeCode( e->id.number ), ( e->audio_position * freq ) / 1000 );
+		}
+	}
+	
+	
   if( samples > 0 ) {
+  	printf( "Samples: %i\n", samples );
     if( p_buf == buf ) buf_size = 0;
     buf_pos = 0;
     samples *= sizeof( short );
@@ -109,18 +208,18 @@ void speech_open() {
   speech_mx = SDL_CreateMutex();
   SDL_AudioSpec fmt;
 
-#ifndef USE_SAM
-  int freq;
-  freq = espeak_Initialize( AUDIO_OUTPUT_SYNCHRONOUS, 10000, ".", 0 );
+#ifdef USE_SAM
+  freq = 11025;
+#else
+  freq = espeak_Initialize( AUDIO_OUTPUT_SYNCHRONOUS, 10000, ".", 1 );
   printf( "Speech [info]: eSpeak frequency: %i\n", freq );
   espeak_SetSynthCallback( espeak_cb );
 #endif 
 
+  fmt.freq     = freq;
 #ifdef USE_SAM
-  fmt.freq     = 11025;
   fmt.format   = AUDIO_U8;
 #else
-  fmt.freq     = freq;
   fmt.format   = AUDIO_S16;
 #endif   
   fmt.channels = 1;
@@ -182,7 +281,8 @@ uint8_t speech_poll() {
 //		espeak_SetPunctuationList(option_punctlist);
 
       p_buf = buf;
-      espeak_Synth( p_list->data, strlen( p_list->data ) + 1, 0, POS_CHARACTER, 0, 4352, NULL, NULL );
+      viseme_count = 0;
+      espeak_Synth( p_list->data, strlen( p_list->data ) + 1, 0, POS_CHARACTER, 0, 0, NULL, NULL );
       buf_play();
 #endif
   		free( p_list );

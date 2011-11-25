@@ -321,6 +321,10 @@ static void init() {
   }
 }
 
+static void viseme( uint8_t v ) {
+	emoticon_mod = v;
+}
+
 // Sets up the plugin descriptor
 pluginclient_t *kiwiray_open( pluginhost_t *p_host ) {
   memcpy( &kiwiray.ident, "KIWI", 4 );
@@ -331,5 +335,6 @@ pluginclient_t *kiwiray_open( pluginhost_t *p_host ) {
   kiwiray.tick       = tick;
   kiwiray.recv       = process_data;
   kiwiray.connected  = connect_status;
+  kiwiray.viseme     = viseme;
   return( &kiwiray );
 }

@@ -359,7 +359,7 @@ static void draw_help( int draw ) {
 /* == JOYSTICK HELPERS ========================================================================== */
 static void joystick_init() {
   joy = SDL_JoystickOpen( 0 );
-  printf( "%i", joy );
+//  printf( "%i", joy );
 }
 
 static int joystick_axis( int axis, int dz, int div ) {
@@ -701,6 +701,9 @@ static void load_plugins() {
     }
   }
   printf( "RoboCortex [info]: Plugins loaded and initialized\n" );
+}
+
+void speak_viseme( uint8_t viseme ) {
 }
 
 static void unload_plugins() {

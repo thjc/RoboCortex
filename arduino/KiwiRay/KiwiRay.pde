@@ -23,9 +23,9 @@
 #define SPW  5 // Must be 5
 
 // Readability
-#define STEPSIZE( n ) digitalWrite( DS0, n & 4 ); \
+#define STEPSIZE( n ) digitalWrite( DS0, n & 1 ); \
                       digitalWrite( DS1, n & 2 ); \
-                      digitalWrite( DS2, n & 1 );
+                      digitalWrite( DS2, n & 4 );
 #define ENABLE( b )   digitalWrite( DEN, b );
 #define X ( (int)( (char)buf[ 0 ] ) )
 #define Y ( (int)( (char)buf[ 1 ] ) )
@@ -176,7 +176,7 @@ void setup() {
   // Initialize I2C
   Wire.begin();
   // Set silly slow I2C for PIC soft I2C
-  _SFR_BYTE( TWSR ) |= _BV( TWPS0 ) | _BV( TWPS1 );
+  //_SFR_BYTE( TWSR ) |= _BV( TWPS0 ) | _BV( TWPS1 );
 
   // Initialize PC-communications
   Serial.begin( 115200 );
