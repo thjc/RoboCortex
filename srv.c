@@ -81,6 +81,8 @@ typedef struct {
   SDL_Rect           src, dst;
   uint8_t           *data;
   struct SwsContext *swsCtx;
+  int                load_order;
+  int                index;
 } capture_t;
 
 // Locals
@@ -302,6 +304,9 @@ static int config_set( char *value, char *token ) {
     } else if( strcmp( token, "dst_h" ) == 0 ) {
       if( cap_count < 0 ) printf( "Config [warning]: dst_h outside device section\n" );
       else cap[ cap_count ].dst.h = atoi( value );
+    } else if( strcmp( token, "load_order" ) == 0 ) {
+      if( cap_count < 0 ) printf( "Config [warning]: load_order outside device section\n" );
+      else cap[ cap_count ].load_order = atoi( value );
     } else if( strcmp( token, "plugin" ) == 0 ) {
       return( 1 );
     } else printf( "Config [warning]: unknown entry %s\n", token );
@@ -791,6 +796,7 @@ int main( int argc, char *argv[] ) {
   int            nalc = 0, nalb = 0;
   disp_data_t    disp;
   int            temp;
+  int            l_min, l_max, l;
   Uint32         time_target;
   Sint32         time_diff;
   FILE          *cf;
@@ -833,18 +839,29 @@ int main( int argc, char *argv[] ) {
 
   // Initialize capture sources
   atexit( capture_free );
-  for( n = 0; n < cap_count; n++ ) {
-    cap_w = cap[ n ].w;
-    cap_h = cap[ n ].h;
-    if( capture_init( cap[ n ].device, fps, &cap_w, &cap_h ) < 0 ) {
-      fprintf( stderr, "RoboCortex [error]: Unable to open capture device %s\n", cap[ n ].device );
-      exit( EXIT_CAPTURE );
-    }
-    if( cap_w != cap[ n ].w || cap_h != cap[ n ].h ) {
-      fprintf( stderr, "RoboCortex [error]: Capture device %s does not support %ix%i (got %ix%i)\n", cap[ n ].device, cap[ n ].w, cap[ n ].h, cap_w, cap_h);
-      exit( EXIT_CAPTURE );
-    }
+  l_min = l_max = cap[ 0 ].load_order;
+  for( n = 1; n < cap_count; n++ ) {
+  	if( cap[ n ].load_order > l_max ) l_max = cap[ n ].load_order;
+  	if( cap[ n ].load_order < l_min ) l_min = cap[ n ].load_order;
   }
+  for( l = l_min; l < l_max + 1; l++ ) {
+	  for( n = 0; n < cap_count; n++ ) {
+	  	if( cap[ n ].load_order == l ) {
+		    cap_w = cap[ n ].w;
+		    cap_h = cap[ n ].h;
+		    cap[ n ].index = capture_init( cap[ n ].device, fps, &cap_w, &cap_h );
+		    printf("Index: %i\n", cap[n].index );
+		    if( cap[ n ].index < 0 ) {
+		      fprintf( stderr, "RoboCortex [error]: Unable to open capture device %s\n", cap[ n ].device );
+		      exit( EXIT_CAPTURE );
+		    }
+		    if( cap_w != cap[ n ].w || cap_h != cap[ n ].h ) {
+		      fprintf( stderr, "RoboCortex [error]: Capture device %s does not support %ix%i (got %ix%i)\n", cap[ n ].device, cap[ n ].w, cap[ n ].h, cap_w, cap_h);
+		      exit( EXIT_CAPTURE );
+		    }
+		  }
+	  }
+	}
 
   // Initialize scaling contexts
   atexit( sws_free );
@@ -973,7 +990,7 @@ int main( int argc, char *argv[] ) {
 
     // Fetch latest picture from capture devices
     for( n = 0; n < cap_count; n++ ) {
-      cap[ n ].data = ( uint8_t * )capture_fetch( n );
+      cap[ n ].data = ( uint8_t * )capture_fetch( cap[ n ].index );
       // plugin->capture
       SDL_mutexP( plug_mx );
       for( pid = 0; pid < MAX_PLUGINS && ( plug = plugs[ pid ] ) != NULL; pid++ )

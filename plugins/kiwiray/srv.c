@@ -11,15 +11,15 @@
 
 #define CAM_SEN              0.3        // Sensitivity
 
-#define TIMEOUT_EMOTICON     100        // Before emoticon is removed
+#define TIMEOUT_EMOTICON     250        // Before emoticon is removed
 
-// Emoticon list
-enum emo_e {
-  EMO_IDLE,
-  EMO_CONNECTED,
-  EMO_HAPPY,
-  EMO_ANGRY
-};
+#define COLOR_RED              1
+#define COLOR_GREEN            2
+#define COLOR_BLUE             4
+#define COLOR_YELLOW            ( COLOR_RED | COLOR_GREEN );
+#define COLOR_CYAN              ( COLOR_GREEN | COLOR_BLUE );
+#define COLOR_MAGENTA           ( COLOR_BLUE | COLOR_RED );
+#define COLOR_WHITE             ( COLOR_RED | COLOR_GREEN | COLOR_BLUE );
 
 static pluginclient_t  kiwiray;         // Plugin descriptor
 static  pluginhost_t  *host;            // RoboCortex descriptor
@@ -39,6 +39,8 @@ static          long   integrate_r;     // Rotational(turn) integration
 static          void  *h_thread;        // Communications thread handle
 static           int   connected;       // Successfully connected
 
+static				  BOOL   bright = 0;			// Brithest possible smileys
+
 // Binary literals for emoticons
 #define B00000000 0x00
 #define B00011000 0x18
@@ -52,7 +54,7 @@ static           int   connected;       // Successfully connected
 static       unsigned char   emoticon;
 static       unsigned  int   emoticon_timeout;
 static                 int   timeout_emoticon = TIMEOUT_EMOTICON;
-static       unsigned char   emoticon_mod;
+static       unsigned char   emoticon_mod = 0;
 
 enum emoticon_list_e {
   EL_DISCONNECT,
@@ -100,51 +102,13 @@ static const unsigned char   emoticon_data[] = {
   0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
 };
 
-const unsigned  char   emotidata[ 4 ][ 24 ] = {
-  {
-    B00000000, B00000000, B00000000,
-    B00000000, B00000000, B00000000,
-    B00000000, B00000000, B00000000,
-    B00000000, B00011000, B00000000,
-    B00000000, B00011000, B00000000,
-    B00000000, B00000000, B00000000,
-    B00000000, B00000000, B00000000,
-    B00000000, B00000000, B00000000
-  }, {
-    B00000000, B00000000, B00000000,
-    B00000000, B00000000, B00000000,
-    B00111100, B00111100, B00111100,
-    B00100100, B00100100, B00100100,
-    B00100100, B00100100, B00100100,
-    B00111100, B00111100, B00111100,
-    B00000000, B00000000, B00000000,
-    B00000000, B00000000, B00000000
-  }, {
-    B00000000, B00000000, B00000000,
-    B00000000, B11100111, B00000000,
-    B00000000, B00000000, B00000000,
-    B00000000, B00000000, B00000000,
-    B00000000, B10000001, B00000000,
-    B00000000, B01000010, B00000000,
-    B00000000, B00111100, B00000000,
-    B00000000, B00000000, B00000000
-  }, {
-    B00000000, B00000000, B00000000,
-    B01000010, B00000000, B00000000,
-    B00100100, B00000000, B00000000,
-    B00000000, B00000000, B00000000,
-    B00000000, B00000000, B00000000,
-    B00111100, B00000000, B00000000,
-    B01000010, B00000000, B00000000,
-    B00000000, B00000000, B00000000
-  }
-};
-
 // Thread: manage KiwiRay serial communications
 static int commthread() {
   int b_working = 0;
-  unsigned char n;
-  unsigned char emotilast = 255;
+  unsigned char b, c, d;
+  unsigned char color;
+  unsigned char emoticon_last = 255, mod_last = 255;
+  BOOL bright_last = 0;
   char p_pkt[ 64 ] = { ( char )0xFF, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
   // Initial serial startup
@@ -175,12 +139,44 @@ static int commthread() {
     p_pkt[ 5 ] =  drive_p * CAM_SEN; // Look   Pitch
     p_pkt[ 6 ] =  3;                 // Stepsize = 1:2^6
     if( b_working) b_working = ( serial_write( p_pkt, 7 ) == 7 );
-    if( emotilast != emoticon ) {
+    if( emoticon_last != emoticon || mod_last != emoticon_mod || bright_last != bright ) {
       p_pkt[ 1 ] = 0x33;             // Display
       p_pkt[ 2 ] = 23;               // 8x8x3 bits (-1)
-      for( n = 0; n < 24; n++ ) p_pkt[ 3 + n ] = emotidata[ emoticon ][ n ];
+      
+      //for( n = 0; n < 24; n++ ) p_pkt[ 3 + n ] = emotidata[ emoticon ][ n ];
+      color = COLOR_WHITE;
+      switch( emoticon ) {
+      	case EL_HAPPY:
+      	case EL_DISCONNECT:
+      		color = COLOR_GREEN;
+      		break;
+      	case EL_ANGRY:
+      		color = COLOR_RED;
+      		break;
+      	case EL_MODERATE:
+      		color = COLOR_YELLOW;
+      		break;
+      }
+      
+      for( b = 0; b != 8; b++ ) {
+      	if( b < 3 || emoticon_mod == 0 ) {
+      		d = emoticon_data[ ( emoticon << 3 ) + b ];
+      	} else {
+      		d = emoticon_data[ ( ( emoticon_mod + ( EL_VISEME1 - 1 ) ) << 3 ) + b ];
+      	}
+      	for( c = 0; c != 3; c++ ) {
+      		if( bright ) {
+      			p_pkt[ b * 3 + c + 3 ] = ~d;
+      		} else {
+      			p_pkt[ b * 3 + c + 3 ] = ( color & ( 1 << c ) ? d : 0x00 );
+      		}
+      	}
+      }
+      
       if( b_working) b_working = ( serial_write( p_pkt, 27 ) == 27 );
-      emotilast = emoticon;
+      emoticon_last = emoticon;
+      mod_last = emoticon_mod;
+      bright_last = bright;
     }
     host->thread_delay( 20 ); // roughly 50 times second
   }
@@ -213,11 +209,11 @@ static void process_data( void* p_data, unsigned char size ) {
       if( data[ n ] == ':' ) {
         emo = 1;
         switch( data[ n + 1 ] ) {
-          case ')': emoticon = EMO_HAPPY;
+          case ')': emoticon = EL_HAPPY;
             break;
-          case '(': emoticon = EMO_ANGRY;
+          case '(': emoticon = EL_ANGRY;
             break;
-          case '|':
+          case '|': emoticon = EL_MODERATE;
             break;
           default:
             emo = 0;
@@ -242,7 +238,7 @@ static void tick() {
 	
 	// Emoticon timeout
 	if( emoticon_timeout ) {
-	  if( --emoticon_timeout == 0 ) emoticon = EMO_CONNECTED;
+	  if( --emoticon_timeout == 0 ) emoticon = EL_NEUTRAL;
 	}
 /*
   // Handle movement X and Y
@@ -365,7 +361,9 @@ static void closer() {
 static void connect_status( int status ) {
   char data[ 256 ];
   connected = status;
-  emoticon = ( connected ? EMO_CONNECTED : EMO_IDLE );
+  bright = 0;
+  emoticon = ( connected ? EL_CONNECT : EL_DISCONNECT );
+  emoticon_timeout = timeout_emoticon;
   if( connected ) {
       memcpy( data, "LANGUAGE/VOICE: ", 16 );
       strcpy( data + 16, host->speak_voice( 0 ) );
