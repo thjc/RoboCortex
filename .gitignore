@@ -3,6 +3,7 @@
 *.res
 /sam/bin/
 .dropbox
+.vagrant
 /work/
 /bin/cli.rc
 /bin/srv.rc
