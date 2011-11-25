@@ -191,6 +191,7 @@ static int commthread() {
 static void process_data( void* p_data, unsigned char size ) {
   int n;
   char data[ 256 ];
+  BOOL emo;
   memcpy( data, p_data, size );
   data[ size ] = 0;
   if( data[ 0 ] == '/' ) {
@@ -210,15 +211,22 @@ static void process_data( void* p_data, unsigned char size ) {
     printf( "KiwiRay [info]: Speaking: %s\n", data );
     for( n = 0; n < size - 1; n++ ) {
       if( data[ n ] == ':' ) {
+        emo = 1;
         switch( data[ n + 1 ] ) {
           case ')': emoticon = EMO_HAPPY;
             break;
           case '(': emoticon = EMO_ANGRY;
             break;
+          case '|':
+            break;
+          default:
+            emo = 0;
+        }
+        if( emo ) {
+          data[ n ] = ' ';
+          data[ n + 1 ] = ' ';
         }
         if( emoticon > 1 ) emoticon_timeout = timeout_emoticon;
-        data[ n ] = ' ';
-        data[ n + 1 ] = ' ';
       }
     }
     host->speak_text( data );
