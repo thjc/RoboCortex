@@ -57,6 +57,7 @@ static void sdl_mixer( void *unused, Uint8 *stream, int stream_len ) {
 	int i;
 	float f,dc;
 	int len=stream_len;
+	static uint8_t off = 0;
 	uint8_t viseme = 0;
 	if( buf_pos >= buf_size ) {
     if( speaking == 1 ) speaking = 2;
@@ -72,6 +73,23 @@ static void sdl_mixer( void *unused, Uint8 *stream, int stream_len ) {
 		  buf_pos++;
 		}
 		if( len < stream_len ) memset( &stream[ len ], 128, stream_len - len );
+
+		if( do_vis ) {
+			f = stream[ 0 ];
+			dc = f;
+			vis_buffer[ 0 ] = ( ( ( int )( f - dc ) ) * vis_mul[ i ] ) >> 8;
+		  if( len > 160 ) len = 160;
+			for( i = 1; i < len; i++ ) {
+				f += ( ( ( float )( char )stream[ ( i << 1 )  ] ) - f ) / 10;
+				dc += ( f - dc ) / 20;
+				vis_buffer[ i ] = ( ( ( int )( f - dc ) ) * vis_mul[ i ] ) >> 8;
+			}
+			for( ; i < 160; i++ ) {
+				f += ( ( ( float )0 ) - f ) / 10;
+				dc += ( f - dc ) / 20;
+				vis_buffer[ i ] = ( ( ( int )( f - dc ) ) * vis_mul[ i ] ) >> 8;
+			}
+		}
 #else		
 		for( i = 0; i < viseme_count; i++ ) {
 			if( viseme_list[ i ].time > buf_pos ) break;
@@ -85,24 +103,23 @@ static void sdl_mixer( void *unused, Uint8 *stream, int stream_len ) {
 		memcpy( stream, &buf[ buf_pos ], len );
 		buf_pos += len;
 		if( len < stream_len ) memset( &stream[ len ], 0, stream_len - len );
-#endif
-		
+
+
 		if( do_vis ) {
-			f = stream[ 0 ];
-			dc = f;
-			vis_buffer[ 0 ] = ( ( ( int )( f - dc ) ) * vis_mul[ i ] ) >> 8;
+		  off = ( off + 28 ) % 512; // Synchronizes waveform for +F2 frequency (not necessary, just looks cool)
 		  if( len > 160 ) len = 160;
 			for( i = 1; i < len; i++ ) {
-				f += ( ( ( float )stream[ i << 1 ] ) - f ) / 10;
-				dc += ( f - dc ) / 20;
-				vis_buffer[ i ] = ( ( ( int )( f - dc ) ) * vis_mul[ i ] ) >> 8;
+				f = ( ( ( float )*( int* )&stream[ ( i << 2 ) + off ] ) );
+				vis_buffer[ i ] = ( ( ( int )( f / 30000000.0 ) ) * vis_mul[ i ] ) >> 8;
 			}
 			for( ; i < 160; i++ ) {
-				f += ( ( ( float )0 ) - f ) / 10;
-				dc += ( f - dc ) / 20;
-				vis_buffer[ i ] = ( ( ( int )( f - dc ) ) * vis_mul[ i ] ) >> 8;
+				vis_buffer[ i ] = 0;
 			}
 		}
+		
+#endif
+		
+
 	}
 
 }

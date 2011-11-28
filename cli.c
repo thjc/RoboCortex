@@ -964,7 +964,7 @@ int main( int argc, char *argv[] ) {
         SDL_FillRect( screen, rect( &r, 0, 0, screen->w, screen->h ), 0 );
       }
 
-/*      if( speech_vis( &p_vis ) == 0 ) {
+      if( speech_vis( &p_vis ) == 0 ) {
         for( temp = 0; temp < 160; temp++ ) {
           int ksx = temp * screen_w / 160, kex = ( temp + 1 ) * screen_w / 160;
           int ksy = p_vis[ temp ], key = p_vis[ temp == 159 ? 0 : temp + 1 ];
@@ -982,7 +982,7 @@ int main( int argc, char *argv[] ) {
           int ksy = p_vis[ temp ], key = p_vis[ temp == 159 ? 0 : temp + 1 ];
           draw_wu( ksx, screen_h - 40 + ksy, kex, screen_h - 40 + key );
         }
-      }*/
+      }
 
     } else {
 
