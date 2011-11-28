@@ -61,52 +61,6 @@ interrupt isr() {
 	}
 }
 
-/*
-interrupt soft_i2c() {
-	unsigned char porta_new, porta_xor, n, temp;
-	int_save_registers; char fsr = FSR;
-	porta_new = PORTA;
-	porta_xor = porta_new ^ porta_mem;
-	porta_mem = porta_new;
-	if( porta_xor.4 ) {
-		if( porta_new.4 == 1 ) {
-			if( i2c_count < 8 ) {
-				i2c_data <<= 1;
-				i2c_data.0 = porta_new.5;
-				i2c_count++;
-			}
-		} else if( i2c_count > 7 ) {
-			if( i2c_count == 9 ) {
-				TRISA5 = 1;
-				i2c_count = 0;
-			} else {
-				if( i2c_bytes < 32 ) {
-					i2c_packet[ i2c_bytes ] = i2c_data;
-					i2c_bytes++;
-					if( i2c_packet[ 0 ] == ( I2C_ADDR << 1 ) ) {
-						TRISA5 = 0;
-						RA5 = 0;
-					}
-				}
-				i2c_count = 9;
-			}
-		}
-	} else {
-		if( porta_new.4 == 1 ) {
-			if( porta_new.5 == 0 ) {
-				// Start condition
-				i2c_count = 0;
-				i2c_bytes = 0;
-			} else {
-				// Stop condition
-			}
-		}
-	}
-	RAIF = 0;
-	FSR = fsr; int_restore_registers;
-}
-*/
-
 void setup( void ) {
 	unsigned char n;
 	OSCCON     = 0b01110000; // Set clock to 32MHz
