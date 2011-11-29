@@ -57,7 +57,7 @@ static void sdl_mixer( void *unused, Uint8 *stream, int stream_len ) {
 	int i;
 	float f,dc;
 	int len=stream_len;
-	static uint8_t off = 0;
+	static uint8_t offset = 0;
 	uint8_t viseme = 0;
 	if( buf_pos >= buf_size ) {
     if( speaking == 1 ) speaking = 2;
@@ -104,17 +104,14 @@ static void sdl_mixer( void *unused, Uint8 *stream, int stream_len ) {
 		buf_pos += len;
 		if( len < stream_len ) memset( &stream[ len ], 0, stream_len - len );
 
-
 		if( do_vis ) {
-		  off = ( off + 28 ) % 512; // Synchronizes waveform for +F2 frequency (not necessary, just looks cool)
+		  offset = ( offset + 28 ) % 512; // Synchronizes waveform for +F2 frequency (not necessary, just looks cool)
 		  if( len > 160 ) len = 160;
 			for( i = 1; i < len; i++ ) {
-				f = ( ( ( float )*( int* )&stream[ ( i << 2 ) + off ] ) );
+				f = ( ( ( float )*( int* )&stream[ ( i << 2 ) + offset ] ) );
 				vis_buffer[ i ] = ( ( ( int )( f / 30000000.0 ) ) * vis_mul[ i ] ) >> 8;
 			}
-			for( ; i < 160; i++ ) {
-				vis_buffer[ i ] = 0;
-			}
+			for( ; i < 160; i++ ) vis_buffer[ i ] = 0;
 		}
 		
 #endif
