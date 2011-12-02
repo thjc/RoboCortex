@@ -492,6 +492,15 @@ static void clients_tick() {
 
 // Processes a data packet
 static void comm_recv( char *buffer, int size, remote_t *remote ) {
+/*
+  // JonasB debug code
+  printf("RoboCortex [debug]: Recevied packet: ");
+  int i;
+  for (i = 0; i != size; i++) {
+    printf("%02x", buffer[i]);
+  }
+  printf("\n");
+*/
   client_t *p_client = clients_find( remote );
   SDL_mutexP( receive_mx );
   if( p_client ) {
