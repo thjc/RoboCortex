@@ -27,18 +27,50 @@
                       digitalWrite( DS1, n & 2 ); \
                       digitalWrite( DS2, n & 4 );
 #define ENABLE( b )   digitalWrite( DEN, !(b) );
-#define X ( (int16_t)( (int8_t)buf[ 0 ] ) )
-#define Y ( (int16_t)( (int8_t)buf[ 1 ] ) )
-#define R ( (int16_t)( (int8_t)buf[ 2 ] ) )
 
 // Math
 #define ABS( x ) ( x & 0x8000 ? ( ~x ) + 1 : x )
 
+struct raw_ctrl
+{
+    int16_t motor[3];
+    uint8_t camera;
+    uint8_t stepsize;
+} __attribute__(( packed ));
+
+struct xyr_ctrl
+{
+    int8_t X;
+    int8_t Y;
+    int8_t R;
+    uint8_t camera;
+    uint8_t stepsize;
+} __attribute__(( packed ));
+
+struct pos_response
+{
+    uint8_t start;
+    uint8_t addr;
+    int16_t motor[3];
+} __attribute__(( packed ));
+
+typedef union data_buffer
+{
+    uint8_t raw_data[64];
+    struct raw_ctrl raw;
+    struct xyr_ctrl xyr;
+    struct pos_response pos;
+} data_buffer;
+
 // Communications handling
-uint8_t state, addr, len, got, buf[ 64 ];
+uint8_t state, addr, len, got;
+
+data_buffer buf;
+
 
 // Frequency generation for the wheels 
 int16_t       wheel[ 3 ] = { 0, 0, 0 };
+int32_t       whacc[ 3 ] = { 0, 0, 0 };
 uint16_t      whext[ 3 ];
 
 // Connection loss protection
@@ -56,6 +88,9 @@ ISR( TIMER2_OVF_vect ) {
   whext[ 0 ] += ABS( wheel[ 0 ] );
   whext[ 1 ] += ABS( wheel[ 1 ] );
   whext[ 2 ] += ABS( wheel[ 2 ] );
+  whacc[ 0 ] += wheel[ 0 ];
+  whacc[ 1 ] += wheel[ 1 ];
+  whacc[ 2 ] += wheel[ 2 ];
   digitalWrite( W0S, ( whext[ 0 ] & 0x8000 ) != 0 );
   digitalWrite( W1S, ( whext[ 1 ] & 0x8000 ) != 0 );
   digitalWrite( W2S, ( whext[ 2 ] & 0x8000 ) != 0 );
@@ -117,27 +152,38 @@ void process() {
   if( addr & 0xFC ) {
     // start i2c
     Wire.beginTransmission( addr );
-    Wire.write( buf, len );
+    Wire.write( buf.raw_data, len );
     Wire.endTransmission();
+    sei();
   } else {
     cli();
-    if( addr == 1 ) {
+    if( addr & 0x1 ) {
       // Addr 0x01: direct 16-bit motor control
-      wheel[ 0 ] = *( int* )&buf[ 0 ];
-      wheel[ 1 ] = *( int* )&buf[ 2 ];
-      wheel[ 2 ] = *( int* )&buf[ 4 ];
-      OCR0B = ( ( ( (unsigned int)buf[ 6 ] ) * 86 ) >> 8 ) + 48;
-      STEPSIZE( buf[ 7 ] );
-    } else if( addr == 0 ) {
+      wheel[ 0 ] = buf.raw.motor[0];
+      wheel[ 1 ] = buf.raw.motor[1];
+      wheel[ 2 ] = buf.raw.motor[2];
+      OCR0B = ( ( ( (uint16_t)buf.raw.camera ) * 86 ) >> 8 ) + 48;
+      STEPSIZE( buf.raw.stepsize );
+    } else if( ! addr & 0x1 ) {
       // Addr 0x00: 8-bit XYR control
-      wheel[ 0 ] = ( X + R ) * 128;
-      wheel[ 1 ] = -64 * X + 110 * Y + R * 128;
-      wheel[ 2 ] = -64 * X - 110 * Y + R * 128;
-      OCR0B = ( ( ( (unsigned int)buf[ 3 ] ) * 86 ) >> 8 ) + 48;
-      STEPSIZE( buf[ 4 ] );
+      wheel[ 0 ] = ( buf.xyr.X + buf.xyr.R ) * 128;
+      wheel[ 1 ] = -64 * buf.xyr.X + 110 * buf.xyr.Y + buf.xyr.R * 128;
+      wheel[ 2 ] = -64 * buf.xyr.X - 110 * buf.xyr.Y + buf.xyr.R * 128;
+      OCR0B = ( ( ( (uint16_t) buf.xyr.camera ) * 86 ) >> 8 ) + 48;
+      STEPSIZE( buf.xyr.stepsize );
     } 
+    sei();
+    // report accumulated wheel ticks
+    if ( addr & 0x2 )
+    {
+      buf.pos.start = 0xFF;
+      buf.pos.addr = addr;
+      buf.pos.motor[0] = (int16_t) (whacc[0] >> 16);
+      buf.pos.motor[1] = (int16_t) (whacc[1] >> 16);
+      buf.pos.motor[2] = (int16_t) (whacc[2] >> 16);
+      Serial.write(buf.raw_data, 8);
+    }
   }
-  sei();
 }
 
 void loop() {
@@ -157,6 +203,7 @@ void loop() {
           state = 3;
           switch (addr & 0x3) {
             case 1:
+            case 3:
               len = 8;
               break;
             default:  
@@ -172,7 +219,7 @@ void loop() {
         state = 3;
         break;
       case 3: // data
-        buf[ got++ ] = data;
+        buf.raw_data[ got++ ] = data;
         if( got == len ) {
           process();
           state = 0;
