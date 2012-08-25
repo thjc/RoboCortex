@@ -53,7 +53,7 @@
 // Network API
 int      net_init     ();
 int      net_sock     ( NET_SOCK *h_sock );
-void     net_addr_init( NET_ADDR *p_addr, uint32_t addr, uint16_t port );
+void     net_addr_init( NET_ADDR *p_addr, const char * addr, uint16_t port );
 uint32_t net_addr_get ( NET_ADDR *p_addr );
 uint16_t net_port_get ( NET_ADDR *p_addr );
 int      net_recv     ( NET_SOCK *h_sock, void* p_buf, int size, NET_ADDR *p_addr );

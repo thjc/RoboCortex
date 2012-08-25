@@ -2,6 +2,7 @@
 #include "include/oswrap.h"
 #include <stdio.h>
 #include <errno.h>
+#include <netdb.h>
 #ifdef _WIN32
 
 static WSADATA wsaData;
@@ -227,10 +228,27 @@ int net_sock( NET_SOCK *h_sock ) {
   return( 0 );
 }
 
-void net_addr_init( NET_ADDR *p_addr, uint32_t addr, uint16_t port ) {
+void net_addr_init( NET_ADDR *p_addr, const char * addr, uint16_t port ) {
+  struct addrinfo hints;
+  struct addrinfo *result, *rp;
+  int ret;
+
   memset( p_addr, 0, sizeof( NET_ADDR ) );
-  p_addr->sin_family = AF_INET;
-  p_addr->sin_addr.s_addr = htonl( addr );
+
+  memset(&hints, 0, sizeof(struct addrinfo));
+  hints.ai_family = AF_UNSPEC;    /* Allow IPv4 or IPv6 */
+  hints.ai_socktype = SOCK_DGRAM; /* Datagram socket */
+  hints.ai_flags = 0;
+  hints.ai_protocol = 0;          /* Any protocol */
+
+  ret = getaddrinfo(addr, NULL, &hints, &result);
+  if (ret != 0) {
+    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(ret));
+    return;
+  }
+
+  if (result != NULL)
+    memcpy(p_addr, result->ai_addr, sizeof(*p_addr));
   p_addr->sin_port = htons( port );
 }
 

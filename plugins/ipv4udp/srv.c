@@ -24,7 +24,7 @@ static       remote_t  remote = { &cli_addr, sizeof( NET_ADDR ), &ipv4udp };
 int receiver() {
   if( !initialized ) return( 1 );
   while( 1 ) {
-    net_addr_init( &cli_addr, NET_ADDR_ANY, 0 );
+    net_addr_init( &cli_addr, "0.0.0.0", 0 );
     size = net_recv( &h_sock, buffer, 8192, &cli_addr );
     if( size >= 4 ) host->comm_recv( buffer, size, &remote );
   }
@@ -55,7 +55,7 @@ static void init() {
       return;
     } else {
       // Bind socket to PORT
-      net_addr_init( &srv_addr, NET_ADDR_ANY, port );
+      net_addr_init( &srv_addr, "0.0.0.0", port );
       if( net_bind( &h_sock, &srv_addr ) < 0 ) {
         fprintf( stderr, "IPv4 UDP  [error]: Socket bind failed\n" );
         return;

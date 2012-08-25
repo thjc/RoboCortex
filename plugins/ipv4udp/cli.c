@@ -5,7 +5,7 @@
 static pluginclient_t  ipv4udp;         // Plugin descriptor
 static   pluginhost_t *host;            // RoboCortex descriptor
 
-static       uint32_t  server;          // Server ip
+static         char *  server;          // Server ip
 static            int  port = PORT;     // Server port
 
 static            int  initialized;     // Successful initialization
@@ -39,7 +39,7 @@ static void init() {
   char temp[ CFG_VALUE_MAX_SIZE ];
 
   // Configuration
-  if( host->cfg_read( temp, "server" ) ) server = net_dtoa( temp );
+  if( host->cfg_read( temp, "server" ) ) server = strdup(temp);
   if( host->cfg_read( temp, "port" ) ) port = atoi( temp );
 
   if( !server ) {
